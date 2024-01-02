@@ -3,7 +3,7 @@ const express = require('express');
 const  fetchData  = require('./controllers/rossum-data-fetch');
 const { getCompanyInfo, createBill } = require('./controllers/quick-books-data-fetch');
 const findVendors = require('./controllers/create-vendor');
-const { redirectToAuthUri, parseRedirect } = require("./controllers/quick-books-oAuth");
+const { redirectToAuthUri, parseRedirect,createAccessToken } = require("./controllers/quick-books-oAuth");
 const findItems = require("./controllers/create-items");
 
 const app = express();
@@ -17,7 +17,8 @@ app.get('/fetch',fetchData)
 // Route OAuth process
 app.get('/auth', redirectToAuthUri);
 app.get('/callback', parseRedirect);
-app.get('/getCompanyInfo', getCompanyInfo);
+app.get('/getAccessToken', createAccessToken);
+// app.get('/getCompanyInfo', getCompanyInfo);
 app.post('/createBill', createBill);
 app.post('/vendor', findVendors);
 app.post('/items', findItems);
