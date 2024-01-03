@@ -1,85 +1,36 @@
-const OAuthClient = require("intuit-oauth");
 const fs = require("fs");
 const path = require("path");
 const { oauthClient, createAccessToken } = require("./quick-books-oAuth");
 const findItems = require("./create-items");
 const findVendors = require("./create-vendor");
-const { response } = require("express");
-
-const billObject = {
-  Line: [
-    {
-      DetailType: "ItemBasedExpenseLineDetail",
-      Amount: 200.0,
-      Id: "1",
-      ItemBasedExpenseLineDetail: {
-        ItemRef: {
-          value: "28",
-        },
-        Qty: "1",
-        UnitPrice: "10",
-        TaxCodeRef: {
-          value: "5",
-        },
-      },
-    },
-    {
-      DetailType: "ItemBasedExpenseLineDetail",
-      Amount: 400.0,
-      Id: "2",
-      ItemBasedExpenseLineDetail: {
-        ItemRef: {
-          value: "29",
-          // TaxAmount:15
-        },
-        TaxCodeRef: {
-          value: "5",
-        },
-      },
-    },
-  ],
-  VendorRef: {
-    value: "67",
-  },
-};
-
-// const getCompanyInfo = (req, res) => {
-//   const companyID = oauthClient.getToken().realmId;
-
-//   const url = OAuthClient.environment.sandbox;
-
-//   oauthClient
-//     .makeApiCall({
-//       url: `${url}v3/company/${companyID}/companyinfo/${companyID}`,
-//     })
-//     .then(function (authResponse) {
-//       console.log(
-//         `The response for API call is :${JSON.stringify(authResponse)}`
-//       );
-//       res.send(JSON.parse(authResponse.text()));
-//     })
-//     .catch(function (e) {
-//       console.error(e);
-//     });
-// };
+const findTerms = require("./create-terms");
 
 const createBill = async (req, res) => {
   try {
     const token = await createAccessToken();
-    // console.log("The token is ", token);
+
     if (!token) {
       return res.status(401).send({ message: "Failed to create access token" });
     }
-
+    console.log("Token is created #########");
     // find and create vendors
     const vendorsResponse = await findVendors(res);
-    // console.log("The vendor Results are ", vendorsResponse);
+
     if (!vendorsResponse) {
       res.status(500).send({ message: "Error in vendor" });
       return; // Stop execution if there are no vendors
     }
+    console.log("Vendors ready @@@@@@@");
 
-    const mappedData = await vendorsResponse.map(async (e, i) => {
+    const termsResponse = await findTerms(res);
+
+    if (!termsResponse) {
+      res.status(500).send({ message: "Error in terms" });
+      return; // Stop execution if there are no terms
+    }
+    console.log("Terms ready @@@@@@@");
+
+    const mappedDataPromises = vendorsResponse.map(async (e, i) => {
       // find and create items
       const itemsResponse = await findItems(i);
 
@@ -87,7 +38,7 @@ const createBill = async (req, res) => {
         res.status(500).send({ message: "Error in items" });
         return; // Stop execution if there are no items
       }
-      const line = await itemsResponse.map((e,i)=>( {
+      const line = itemsResponse.map((e, i) => ({
         DetailType: "ItemBasedExpenseLineDetail",
         Amount: `${e.amountTotal}`,
         Id: `${i}`,
@@ -101,35 +52,51 @@ const createBill = async (req, res) => {
             value: "5",
           },
         },
-      }))
-      // console.log("The items results are ", line);
+      }));
 
       return line;
-      
     });
 
+    const mappedData = await Promise.all(mappedDataPromises);
     if (!mappedData) {
       res.status(500).send({ message: "Error in mapping" });
       return; // Stop execution if there are no items
     }
-    console.log(mappedData)
-    // const companyID = process.env.REALM_ID;
-    // const folderPath = path.join(__dirname, "../rossum_data");
-    // const fileNames = fs.readdirSync(folderPath);
+    console.log("Data is mapped");
 
-    // //READING ROSSUM DATA
-    // if (fileNames.length === 1) {
-    //   const fileName = fileNames[0];
-    //   const filePath = path.join(folderPath, fileName);
+    const companyID = process.env.REALM_ID;
+    //READING ROSSUM DATA
+    const folderPath = path.join(__dirname, "../rossum_data");
+    const fileNames = fs.readdirSync(folderPath);
 
-    //   const rossumData = JSON.parse(fs.readFileSync(filePath, "utf8"));
-    //   const results = rossumData.results;
-    //   const data = results.map((item) => {
-    //     return {
-    //       label: item.content.map((content) => content.schema_id),
-    //     };
-    //   });
-      // console.log("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    if (!fileNames.length === 1) {
+      console.error("Expected one file in the Rossumdata folder", fileNames);
+      return;
+    }
+
+    const fileName = fileNames[0];
+    const filePath = path.join(folderPath, fileName);
+    const rossumData = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    const billData = rossumData.results;
+    for (let i = 0; i < vendorsResponse.length; i++) {
+      const invoiceSection = billData[i].content.find(
+        (child) => child.schema_id === "invoice_info_section"
+      );
+
+      if (!invoiceSection) {
+        console.error("No invoice_section found");
+        return;
+      }
+
+      const issueDate = invoiceSection.children.find(
+        (datapoint) => datapoint.schema_id === "date_issue"
+      );
+      const dueDate = invoiceSection.children.find(
+        (datapoint) => datapoint.schema_id === "date_due"
+      );
+      const billNumber = invoiceSection.children.find(
+        (datapoint) => datapoint.schema_id === "document_id"
+      );
 
       const response = await oauthClient.makeApiCall({
         url: `https://sandbox-quickbooks.api.intuit.com/v3/company/${companyID}/bill?minorversion=69`,
@@ -137,16 +104,21 @@ const createBill = async (req, res) => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(billObject),
+        body: JSON.stringify({
+          VendorRef: { value: `${vendorsResponse[i]}` },
+          Line: mappedData[i],
+          DueDate: dueDate.value,
+          TxnDate: issueDate.value,
+          DocNumber: billNumber.value,
+          SalesTermRef: { value: `${termsResponse[i]}` },
+        }),
       });
 
-      console.log("Bill created successfully! ");
-      res.status(200).send({ message: "Bill created successfully!" });
-    
-    // else {
-    //   console.error("Expected one file in the Rossumdata folder", fileNames);
-    //   res.status(500).send("Error creating bill");
-    // }
+      console.log(`Bill ${i + 1} created successfully! `);
+    }
+    console.log(`All Bills created successfully! `);
+    res.status(200).send({ message: "All bills created successfully!" });
+    return;
   } catch (error) {
     console.error("The error is in bill", error);
     res.status(500).send("Error creating bill");

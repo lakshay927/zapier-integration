@@ -9,23 +9,24 @@ const vendorData = {
 
 const findVendors = async () => {
   try {
-    const companyID = process.env.REALM_ID
-    
+    const companyID = process.env.REALM_ID;
+
     //READING ROSSUM DATA
     const folderPath = path.join(__dirname, "../rossum_data");
     const fileNames = fs.readdirSync(folderPath);
 
     if (!fileNames.length === 1) {
       console.error("Expected one file in the Rossumdata folder", fileNames);
-     return;
+      return;
     }
+
     const fileName = fileNames[0];
     const filePath = path.join(folderPath, fileName);
-
     const rossumData = JSON.parse(fs.readFileSync(filePath, "utf8"));
     const results = rossumData.results;
+
     const itemResults = [];
-  
+
     for (const item of results) {
       const vendorSection = item.content.find(
         (child) => child.schema_id === "vendor_section"
@@ -33,15 +34,18 @@ const findVendors = async () => {
 
       if (!vendorSection) {
         console.error("No vendor_section found");
-       return;
+        return;
       }
       const senderName = vendorSection.children.find(
         (datapoint) => datapoint.schema_id === "sender_name"
       );
+      const senderAddress = vendorSection.children.find(
+        (datapoint) => datapoint.schema_id === "sender_address"
+      );
 
       if (senderName.value == "") {
         console.error("Sender Name empty");
-       return;
+        return;
       }
       const senderNameValue = senderName.value;
 
@@ -54,15 +58,13 @@ const findVendors = async () => {
       });
 
       const queryResult = JSON.parse(findResponse.body);
-// console.log("The query result is ", queryResult)
+
       if (Object.keys(queryResult.QueryResponse).length > 0) {
         // if the vendor is found
         const vendorId = queryResult.QueryResponse.Vendor[0].Id;
-        itemResults.push(vendorId);
-        // console.log("The vendor_id is ", vendorId);
-        // return vendorId;
-      } else {
 
+        itemResults.push(vendorId);
+      } else {
         const createVendor = await oauthClient.makeApiCall({
           url: `https://sandbox-quickbooks.api.intuit.com/v3/company/${companyID}/vendor?minorversion=69`,
           method: "POST",
@@ -72,21 +74,24 @@ const findVendors = async () => {
           body: JSON.stringify({
             ...vendorData,
             DisplayName: senderNameValue,
+            BillAddr: {
+              Line1: senderAddress.value,
+            }
+
           }),
         });
         // console.log("The create vendor response is ", createVendor);
         const createVendorResponse = JSON.parse(createVendor.body);
         const vendorId = createVendorResponse.QueryResponse.Vendor.Id;
+
         itemResults.push(vendorId);
-        // console.log("The response of create vendor: ", createVendor);
-        // return vendorId;
       }
     }
 
     return itemResults;
   } catch (error) {
-    console.error("The vendor error is ", );
-   
+    console.error("The vendor error is ");
+
     return;
   }
 };

@@ -38,7 +38,7 @@ const parseRedirect = async (req, res) => {
 const createAccessToken = async (req, res) => {
   try {
     if (oauthClient.isAccessTokenValid()) {
-      console.log("The access_token is valid");
+      // console.log("The access_token is valid");
       return oauthClient;
     }
 
@@ -47,9 +47,9 @@ const createAccessToken = async (req, res) => {
       const authResponse = await oauthClient.refreshUsingToken(
         process.env.REFRESH_TOKEN
       );
-      console.log(
-        "Tokens refreshed : " + JSON.stringify(authResponse.getJson())
-      );
+      // console.log(
+      //   "Tokens refreshed : " + JSON.stringify(authResponse.getJson())
+      // );
       return oauthClient;
     }
   } catch (e) {
