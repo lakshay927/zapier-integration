@@ -43,18 +43,14 @@ const createAccessToken = async (req, res) => {
     }
 
     if (!oauthClient.isAccessTokenValid()) {
-      // console.log("the access token is being generated")
-      const authResponse = await oauthClient.refreshUsingToken(
-        process.env.REFRESH_TOKEN
-      );
-      // console.log(
-      //   "Tokens refreshed : " + JSON.stringify(authResponse.getJson())
-      // );
+      console.log("the access token is being generated")
+      const authResponse = await oauthClient.refreshUsingToken(process.env.REFRESH_TOKEN);
+      
       return oauthClient;
     }
   } catch (e) {
     console.error("The error message is :" + e);
-    console.error(e.intuit_tid);
+    // console.error(e.intuit_tid);
     return;
   }
 };

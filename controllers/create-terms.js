@@ -37,7 +37,11 @@ const findTerms = async () => {
       );
       const termsValue = billTerms.value.trim();
       //   console.log("The terms value is ", termsValue);
-      if (termsValue == "" || termsValue == "Due Upon Receipt") {
+      if (termsValue == "") {
+        termsResults.push(3);
+        continue;  
+      }
+      if (termsValue == "Due Upon Receipt") {
         termsResults.push(1);
         continue;
       }
@@ -69,7 +73,7 @@ const findTerms = async () => {
         });
         console.log("The create term response is ", createTerm);
         const createTermResponse = JSON.parse(createTerm.body);
-        const termId = createTermResponse.QueryResponse.Term.Id;
+        const termId = createTermResponse.Term.Id;
 
         termsResults.push(termId);
       }

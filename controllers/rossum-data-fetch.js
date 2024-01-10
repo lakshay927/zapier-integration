@@ -5,13 +5,13 @@ const path = require("path");
 const fetchData = (req, res) => {
   const queue_id = process.env.QUEUE_ID;
   const loginUrl = process.env.LOGIN_URL;
-  const username = process.env.USERNAME;
+  const username = process.env.USEREMAIL;
   const password = process.env.PASSWORD;
 
   let today = new Date();
   //write a date object for 16 dec 2023
 
-  today.setDate(12);
+  today.setDate(20);
   today.setMonth(11);
   today.setFullYear(2023);
   // today.setHours(0, 0, 0, 0);
@@ -33,9 +33,7 @@ const fetchData = (req, res) => {
     pad(date.getUTCDate());
 
   const makeUrl = (id, date_start, date_end) =>
-    `https://elis.rossum.ai/api/v1/queues/${id}/export?format=json&exported_at_after=${toISOString(
-      date_start
-    )}&exported_at_before=${toISOString(date_end)}&page_size=100&page=1`;
+    `https://elis.rossum.ai/api/v1/queues/${id}/export?format=json&status=confirmed&page_size=100&page=1`;
 
   const createHeaders = (token) => ({
     headers: {
@@ -48,7 +46,7 @@ const fetchData = (req, res) => {
     const filePath = path.join(
       __dirname,
       "../rossum_data",
-      "data_" + date_start.getTime() + "_" + date_end.getTime() + ".json"
+      "data_" + date_start.getTime() + "_" + date_end.getTime() + ".xml"
     );
     const dataStream = fs.createWriteStream(filePath);
     fetch(makeUrl(queue_id, date_start, date_end), createHeaders(token))
@@ -72,4 +70,53 @@ const fetchData = (req, res) => {
   res.send("Data are fetched from Rossum...");
 };
 
-module.exports = fetchData;
+const dataStatusChanged = (req,res) => {
+  const queue_id = process.env.QUEUE_ID;
+  const loginUrl = process.env.LOGIN_URL;
+  const username = process.env.USEREMAIL;
+  const password = process.env.PASSWORD;
+
+  const makeUrl = (id) =>
+    `https://elis.rossum.ai/api/v1/queues/${id}/export?format=xml&status=confirmed&to_status=exported`;
+
+  const createHeaders = (token) => ({
+    method: "POST",
+    headers: {
+      "Content-Type": "application/xml",
+      Authorization: `token ${token}`,
+    },
+  });
+
+  // Use the key in your API call
+  const fetchXMLs = (token) => {
+    fetch(makeUrl(queue_id), createHeaders(token))
+      .then(async(r) => {
+        const data = r;
+        // Handle the response as needed
+        console.log("Response from dataStatusChanged API:", data);
+        res.status(200).send("Data status changed in Rossum...");
+      })
+      .catch((error) => {
+        console.log("Error in dataStatusChanged API:", error);
+        res.status(400).send("error occured");
+      });
+  };
+
+  fetch(loginUrl, {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+    headers: { "Content-Type": "application/json" },
+  })
+    .then((r) => r.json())
+    .then(({ key }) => {
+      console.log("key", key);
+      fetchXMLs(key);
+    })
+    .catch((error) => {
+      console.error("Error during login:", error);
+    });
+
+  console.log("Data status changed in Rossum...");
+};
+
+module.exports = { fetchData, dataStatusChanged };

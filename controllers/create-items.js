@@ -2,7 +2,34 @@ const fs = require("fs");
 const path = require("path");
 const { oauthClient } = require("./quick-books-oAuth");
 
+function naiveRound(num, decimalPlaces = 0) {
+  var p = Math.pow(10, decimalPlaces);
+  return Math.round(num * p) / p;
+}
+
+function escapeStringForJson(str) {
+  return (
+    str
+      .replace(/\\/g, "\\\\") // Escape backslashes
+      .replace(/&/g, " ")
+      .replace(/#/g, " ")
+
+      // .replace(/\[/g, "") // Escape brackets
+      // .replace(/\]/g, "") // Escape brackets
+      // .replace(/\./g, "") // Escape period
+      .replace(/\u2013/g, "") // Remove en dash
+      .replace(/'/g, "") // Escape single quotes
+      .replace(/"/g, "") // Escape double quotes
+      .replace(/\n/g, " ") // Remove newlines and replace with a space
+      .replace(/\r/g, "")
+      .replace(":", "")
+      .substring(0, 100)
+      .trim()
+  ); // Remove carriage returns
+}
+
 const findItems = async (i) => {
+  var itemName = "";
   try {
     const companyID = process.env.REALM_ID;
     const folderPath = path.join(__dirname, "../rossum_data");
@@ -17,6 +44,15 @@ const findItems = async (i) => {
     const rossumData = JSON.parse(fs.readFileSync(filePath, "utf8"));
     const items = rossumData.results[i].content;
 
+    const taxSection = items.find(
+      (child) => child.schema_id === "amounts_section"
+    );
+
+    if (!taxSection) {
+      console.error("No tax_section found");
+      return;
+    }
+
     const itemResults = [];
 
     const itemSection = items.find(
@@ -27,6 +63,10 @@ const findItems = async (i) => {
       console.error("No item_section found");
       return;
     }
+
+    const tax = taxSection.children.find(
+      (datapoint) => datapoint.schema_id === "amount_total_tax"
+    );
     const lineItems = itemSection.children.find(
       (datapoint) => datapoint.schema_id === "line_items"
     );
@@ -46,10 +86,21 @@ const findItems = async (i) => {
       );
 
       const itemNameValue = itemDescription.value || "other";
-      const itemName = itemNameValue.substring(0, 15).trim();
-      const itemAmountTotalValue = itemAmountTotal.value;
+      itemName = escapeStringForJson(itemNameValue);
+      const taxPercentage = 13;
+      let newAmount = 0;
+      if (tax.value == "") {
+        const amountWithoutTax = itemAmountTotal.value / (1 + taxPercentage / 100);
+        newAmount = naiveRound(amountWithoutTax, 2);
+      }
+      const itemAmountTotalValue =
+        tax.value == "" ? newAmount : itemAmountTotal.value ;
       const itemQuantityValue = itemQuantity.value;
       const itemAmountValue = itemAmount.value;
+      console.log("The item quantity  is", itemQuantityValue);
+      console.log("The item value is", itemAmountValue);
+      console.log("The item totalvalue is", itemAmountTotalValue);
+      // console.log("The item name is", itemName);
 
       const findResponse = await oauthClient.makeApiCall({
         url: `https://sandbox-quickbooks.api.intuit.com/v3/company/${companyID}/query?query=select * from Item where Name='${itemName}'&minorversion=69`,
@@ -58,7 +109,6 @@ const findItems = async (i) => {
           "Content-Type": "text/plain",
         },
       });
-
       const queryResponse = JSON.parse(findResponse.body);
 
       if (Object.keys(queryResponse.QueryResponse).length > 0) {
@@ -73,38 +123,66 @@ const findItems = async (i) => {
 
         itemResults.push(itemObject);
       } else {
-        const createItem = await oauthClient.makeApiCall({
-          url: `https://sandbox-quickbooks.api.intuit.com/v3/company/${companyID}/item`,
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            ExpenseAccountRef: {
-              name: "Cost of Goods Sold",
-              value: "80",
+        console.log("The item name is#############", itemName);
+        console.log(queryResponse);
+        try {
+          const createItem = await oauthClient.makeApiCall({
+            url: `https://sandbox-quickbooks.api.intuit.com/v3/company/${companyID}/item`,
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
             },
-            Name: itemName,
-          }),
-        });
+            body: JSON.stringify({
+              ExpenseAccountRef: {
+                name: "Cost of Goods Sold",
+                value: "80",
+              },
+              Name: itemName,
+            }),
+          });
 
-        const createItemResponse = await JSON.parse(createItem.body);
-        const itemId = createItemResponse.Item.Id;
-        const itemObject = {
-          id: itemId,
-          name: itemName,
-          amount: itemAmountValue,
-          quantity: itemQuantityValue,
-          amountTotal: itemAmountTotalValue,
-        };
+          const createItemResponse = await JSON.parse(createItem.body);
+          const itemId = createItemResponse.Item.Id;
+          const itemObject = {
+            id: itemId,
+            name: itemName,
+            amount: itemAmountValue,
+            quantity: itemQuantityValue,
+            amountTotal: itemAmountTotalValue,
+          };
 
-        itemResults.push(itemObject);
+          itemResults.push(itemObject);
+        } catch (error) {
+          const errorBody = JSON.parse(error.authResponse.body);
+          const bodyResponse = errorBody.Fault;
+          // console.log("The error body is", bodyResponse);
+          if (bodyResponse.Error.length > 0) {
+            // console.log("The error is", bodyResponse.Error);
+            if (
+              bodyResponse.Error[0].Detail.includes(
+                "The name supplied already exists"
+              )
+            ) {
+              console.log(
+                "The duplicate item id is",
+                parseInt(bodyResponse.Error[0].Detail.substring(39))
+              );
+              const itemObject = {
+                id: parseInt(bodyResponse.Error[0].Detail.substring(39)),
+                name: itemName,
+                amount: itemAmountValue,
+                quantity: itemQuantityValue,
+              };
+              itemResults.push(itemObject);
+            }
+          }
+        }
       }
     }
-     console.log(`The items for Bill ${i} are ready !!!!!!!!`);
+    console.log(`The items for Bill ${i} are ready !!!!!!!!`);
     return itemResults;
   } catch (error) {
-    console.error("The item error is", error);
+    console.error("The item error is", itemName, "@@", error);
     return;
   }
 };

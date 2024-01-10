@@ -7,6 +7,19 @@ const vendorData = {
   Suffix: "Sr.",
 };
 
+function escapeStringForJson(str) {
+  return str
+    .replace(/\\/g, "\\\\") // Escape backslashes
+    .replace(/&/g, " ")
+    .replace(/\./g, "") // Escape period
+    .replace(/'/g, "") // Escape single quotes
+    .replace(/"/g, "") // Escape double quotes
+    .replace(/\n/g, " ") // Remove newlines and replace with a space
+    .replace(/\r/g, "")
+    .replace(":", "")
+    .trim(); // Remove carriage returns
+}
+
 const findVendors = async () => {
   try {
     const companyID = process.env.REALM_ID;
@@ -43,11 +56,8 @@ const findVendors = async () => {
         (datapoint) => datapoint.schema_id === "sender_address"
       );
 
-      if (senderName.value == "") {
-        console.error("Sender Name empty");
-        return;
-      }
-      const senderNameValue = senderName.value;
+      const senderNameValue = escapeStringForJson(senderName.value)||'other';
+      console.log("The sender name is", senderNameValue);
 
       const findResponse = await oauthClient.makeApiCall({
         url: `https://sandbox-quickbooks.api.intuit.com/v3/company/${companyID}/query?query=select * from vendor where DisplayName='${senderNameValue}'&minorversion=69`,
@@ -58,7 +68,7 @@ const findVendors = async () => {
       });
 
       const queryResult = JSON.parse(findResponse.body);
-
+      console.log("The query result is ", queryResult.QueryResponse.Vendor);
       if (Object.keys(queryResult.QueryResponse).length > 0) {
         // if the vendor is found
         const vendorId = queryResult.QueryResponse.Vendor[0].Id;
@@ -72,17 +82,15 @@ const findVendors = async () => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            ...vendorData,
             DisplayName: senderNameValue,
             BillAddr: {
               Line1: senderAddress.value,
-            }
-
+            },
           }),
         });
-        // console.log("The create vendor response is ", createVendor);
+        // console.log("The create vendor respone is ", createVendor);
         const createVendorResponse = JSON.parse(createVendor.body);
-        const vendorId = createVendorResponse.QueryResponse.Vendor.Id;
+        const vendorId = createVendorResponse.Vendor.Id;
 
         itemResults.push(vendorId);
       }
@@ -90,7 +98,7 @@ const findVendors = async () => {
 
     return itemResults;
   } catch (error) {
-    console.error("The vendor error is ");
+    console.error("The vendor error is", error);
 
     return;
   }
