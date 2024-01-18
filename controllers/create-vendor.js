@@ -2,11 +2,6 @@ const fs = require("fs");
 const path = require("path");
 const { oauthClient } = require("./quick-books-oAuth");
 
-const vendorData = {
-  Title: "Ms.",
-  Suffix: "Sr.",
-};
-
 function escapeStringForJson(str) {
   return str
     .replace(/\\/g, "\\\\") // Escape backslashes
@@ -57,7 +52,6 @@ const findVendors = async () => {
       );
 
       const senderNameValue = escapeStringForJson(senderName.value)||'other';
-      console.log("The sender name is", senderNameValue);
 
       const findResponse = await oauthClient.makeApiCall({
         url: `https://sandbox-quickbooks.api.intuit.com/v3/company/${companyID}/query?query=select * from vendor where DisplayName='${senderNameValue}'&minorversion=69`,
@@ -68,7 +62,7 @@ const findVendors = async () => {
       });
 
       const queryResult = JSON.parse(findResponse.body);
-      console.log("The query result is ", queryResult.QueryResponse.Vendor);
+
       if (Object.keys(queryResult.QueryResponse).length > 0) {
         // if the vendor is found
         const vendorId = queryResult.QueryResponse.Vendor[0].Id;
@@ -88,7 +82,7 @@ const findVendors = async () => {
             },
           }),
         });
-        // console.log("The create vendor respone is ", createVendor);
+
         const createVendorResponse = JSON.parse(createVendor.body);
         const vendorId = createVendorResponse.Vendor.Id;
 

@@ -36,7 +36,7 @@ const findTerms = async () => {
         (datapoint) => datapoint.schema_id === "terms"
       );
       const termsValue = billTerms.value.trim();
-      //   console.log("The terms value is ", termsValue);
+
       if (termsValue == "") {
         termsResults.push(3);
         continue;  
@@ -54,7 +54,7 @@ const findTerms = async () => {
       });
 
       const queryResult = JSON.parse(findResponse.body);
-      //   console.log("The query result is ", queryResult);
+
       if (Object.keys(queryResult.QueryResponse).length > 0) {
         // if the term is found
         const termId = queryResult.QueryResponse.Term[0].Id;
@@ -71,10 +71,9 @@ const findTerms = async () => {
             Name: termsValue,
           }),
         });
-        console.log("The create term response is ", createTerm);
+
         const createTermResponse = JSON.parse(createTerm.body);
         const termId = createTermResponse.Term.Id;
-
         termsResults.push(termId);
       }
     }

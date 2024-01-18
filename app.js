@@ -10,6 +10,12 @@ const { updatedBills } = require("./controllers/update-bills");
 const app = express();
 app.use(express.json());
 
+
+    setInterval(fetchData.fetchData, 24 * 60 * 60 * 1000); // 24 hours
+
+    setInterval( createBill, 60 * 60 * 1000); // 1 hours
+
+
 app.get('/', (req, res) => {
     res.send('Hello World');
 }

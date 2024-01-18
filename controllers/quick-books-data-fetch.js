@@ -32,6 +32,15 @@ const getCompanyInfo = (req, res) => {
 
 const createBill = async (req, res) => {
   try {
+
+    const folderPath = path.join(__dirname, "../rossum_data");
+    const fileNames = fs.readdirSync(folderPath);
+
+    if (!fileNames.length === 1) {
+      console.error("Expected one file in the Rossumdata folder", fileNames);
+      return;
+    }
+
     const token = await createAccessToken();
 
     if (!token) {
@@ -56,11 +65,10 @@ const createBill = async (req, res) => {
     const mappedDataPromises = vendorsResponse.map(async (e, i) => {
       // find and create items
       const itemsResponse = await findItems(i);
-
       if (!itemsResponse) {
         throw new Error("Error in items");
-        //  return res.status(500).send({ message: "Error in items" });
       }
+
       const line = itemsResponse.map((e, i) => ({
         DetailType: "ItemBasedExpenseLineDetail",
         Amount: `${e.amountTotal || 0}`,
@@ -88,22 +96,12 @@ const createBill = async (req, res) => {
 
     const companyID = process.env.REALM_ID;
     //READING ROSSUM DATA
-    const folderPath = path.join(__dirname, "../rossum_data");
-    const fileNames = fs.readdirSync(folderPath);
-
-    if (!fileNames.length === 1) {
-      console.error("Expected one file in the Rossumdata folder", fileNames);
-      return;
-    }
+    
 
     const fileName = fileNames[0];
     const filePath = path.join(folderPath, fileName);
     const rossumData = JSON.parse(fs.readFileSync(filePath, "utf8"));
     const billData = rossumData.results;
-
-//     const updateBillsId = [];
-//     const updateBills = [];
-// const updateBillsVendors=[]
 
     for (let i = 0; i < vendorsResponse.length; i++) {
       const invoiceSection = billData[i].content.find(
@@ -140,9 +138,6 @@ const createBill = async (req, res) => {
       }
       let GTC = "TaxExcluded";
       if (tax.value == "") {
-        // mappedData[i].forEach(
-        //   (e) => (e.ItemBasedExpenseLineDetail.TaxCodeRef.value = "2")
-        // );
         GTC = "TaxExcluded";
       }
       console.log(
@@ -150,7 +145,7 @@ const createBill = async (req, res) => {
         i,
         mappedData[i][0].ItemBasedExpenseLineDetail.TaxCodeRef
       );
-      // console.log("The tax is",tax);
+
       const createdBill = await oauthClient.makeApiCall({
         url: `https://sandbox-quickbooks.api.intuit.com/v3/company/${companyID}/bill?minorversion=69`,
         method: "POST",
@@ -173,71 +168,17 @@ const createBill = async (req, res) => {
 
       const createBillData = JSON.parse(createdBill.body);
       const billId = createBillData.Bill.Id;
-      // if (tax.value == "") {
-      //   mappedData[i].forEach(
-      //     (e) => (e.ItemBasedExpenseLineDetail.TaxCodeRef.value = "5")
-      //   );
-      
-        // updateBillsId.push(billId);
-        // updateBills.push(mappedData[i]);
-        // updateBillsVendors.push(vendorsResponse[i])
-      // }
-
       console.log(`Bill ${i + 1} created successfully! `, billId);
     }
     console.log(`All Bills created successfully! `);
 
-    // const dataFile = JSON.stringify(updateBills);
-    // const idsFile = JSON.stringify(updateBillsId);
-    // const vendorsFile = JSON.stringify(updateBillsVendors);
+    // Data status changed in Rossum
+    dataStatusChanged();
 
-    // const dataMappedPath = "./dataMapped.json";
-    // const idsPath = "./ids.json";
-    // const vendorsPath = "./vendors.json";
+    // Delete the rossum file after successful processing bills
+    fs.unlinkSync(filePath);
+    console.log(`File ${fileName} deleted after successful processing.`);
 
-    // // Write the JSON string to the file
-    // fs.writeFile(dataMappedPath, dataFile, "utf-8", (err) => {
-    //   if (err) {
-    //     console.error("Error writing JSON file:", err);
-    //   } else {
-    //     console.log("JSON file saved successfully!");
-    //   }
-    // });
-    // fs.writeFile(idsPath, idsFile, "utf-8", (err) => {
-    //   if (err) {
-    //     console.error("Error writing JSON file:", err);
-    //   } else {
-    //     console.log("JSON file saved successfully!");
-    //   }
-    // });
-    // fs.writeFile(vendorsPath, vendorsFile, "utf-8", (err) => {
-    //   if (err) {
-    //     console.error("Error writing JSON file:", err);
-    //   } else {
-    //     console.log("JSON file saved successfully!");
-    //   }
-    // });
-
-    // // update bills for tax
-    // for (let i = 0; i < updateBills.length; i++) {
-    //   const updatedBill = await oauthClient.makeApiCall({
-    //     url: `https://sandbox-quickbooks.api.intuit.com/v3/company/${companyID}/bill?minorversion=69`,
-    //     method: "POST",
-    //     headers: {
-    //       "Content-Type": "application/json",
-    //     },
-    //     body: JSON.stringify({
-    //       Id: updateBillsId[i],
-    //       VendorRef: { value: `${vendorsResponse[i]}` },
-    //       Line: updateBills[i],
-    //       SyncToken: "1",
-    //     }),
-    //   });
-    //   console.log(`Bill ${i + 1} updated successfully! `, updateBills[i]);
-    // }
-
-
-    dataStatusChanged()
     return res.status(200).send({ message: "All bills created successfully!" });
   } catch (error) {
     console.error("The error is in bill", error);

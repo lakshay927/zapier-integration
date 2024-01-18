@@ -97,10 +97,6 @@ const findItems = async (i) => {
         tax.value == "" ? newAmount : itemAmountTotal.value ;
       const itemQuantityValue = itemQuantity.value;
       const itemAmountValue = itemAmount.value;
-      console.log("The item quantity  is", itemQuantityValue);
-      console.log("The item value is", itemAmountValue);
-      console.log("The item totalvalue is", itemAmountTotalValue);
-      // console.log("The item name is", itemName);
 
       const findResponse = await oauthClient.makeApiCall({
         url: `https://sandbox-quickbooks.api.intuit.com/v3/company/${companyID}/query?query=select * from Item where Name='${itemName}'&minorversion=69`,
@@ -123,8 +119,6 @@ const findItems = async (i) => {
 
         itemResults.push(itemObject);
       } else {
-        console.log("The item name is#############", itemName);
-        console.log(queryResponse);
         try {
           const createItem = await oauthClient.makeApiCall({
             url: `https://sandbox-quickbooks.api.intuit.com/v3/company/${companyID}/item`,
@@ -155,9 +149,7 @@ const findItems = async (i) => {
         } catch (error) {
           const errorBody = JSON.parse(error.authResponse.body);
           const bodyResponse = errorBody.Fault;
-          // console.log("The error body is", bodyResponse);
           if (bodyResponse.Error.length > 0) {
-            // console.log("The error is", bodyResponse.Error);
             if (
               bodyResponse.Error[0].Detail.includes(
                 "The name supplied already exists"
