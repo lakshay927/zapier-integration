@@ -6,10 +6,10 @@ const findVendors = require('./controllers/create-vendor');
 const { redirectToAuthUri, parseRedirect,createAccessToken } = require("./controllers/quick-books-oAuth");
 const findItems = require("./controllers/create-items");
 const { updatedBills } = require("./controllers/update-bills");
-
+const cors = require('cors')
 const app = express();
+app.use(cors())
 app.use(express.json());
-
 
     setInterval(fetchData.fetchData, 24 * 60 * 60 * 1000); // 24 hours
 
@@ -17,7 +17,7 @@ app.use(express.json());
 
 
 app.get('/', (req, res) => {
-    res.send('Hello World');
+    res.send('The Quick books integration server is running');
 }
 );
 app.get('/fetch',fetchData.fetchData)
