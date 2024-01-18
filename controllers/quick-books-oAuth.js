@@ -1,4 +1,5 @@
 const OAuthClient = require("intuit-oauth");
+const fs = require("fs");
 
 const oauthClient = new OAuthClient({
   clientId: process.env.CLIENT_ID,
@@ -24,8 +25,12 @@ const parseRedirect = async (req, res) => {
 
     // Exchange the auth code retrieved from the **req.url** on the redirectUri
     const authResponse = await oauthClient.createToken(redirectUri);
-    console.log("The authResponse is " + authResponse);
+    const refreshToken = authResponse.getJson().refresh_token;
 
+    // Store the refresh token in file
+    const filePath = "./token.txt";
+    fs.writeFileSync(filePath, refreshToken);
+    
     console.log("The Token is  " + JSON.stringify(authResponse.getJson()));
     res.status(200).send(authResponse.getJson());
   } catch (e) {
@@ -44,7 +49,9 @@ const createAccessToken = async (req, res) => {
 
     if (!oauthClient.isAccessTokenValid()) {
       console.log("the access token is being generated")
-      const authResponse = await oauthClient.refreshUsingToken(process.env.REFRESH_TOKEN);
+      const filePath = "./token.txt";
+      const refreshToken = fs.readFileSync(filePath, "utf8");
+      const authResponse = await oauthClient.refreshUsingToken(refreshToken);
       
       return oauthClient;
     }
